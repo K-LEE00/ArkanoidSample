@@ -9,7 +9,7 @@ public class GameManager : MonoBehaviour
     public string startMsg;
     public string endMsg;
     public int blockCount;
-    public BlockAreaController BlockArea;
+    public StageController StageControll;
     public BallController Ball;
     public PlayerController player;
 
@@ -19,6 +19,8 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
+
+        blockCount = StageControll.CreateStage(0);
         InitGame();
     }
 
@@ -42,7 +44,7 @@ public class GameManager : MonoBehaviour
         crashCount = 0;
         isGameState = false;
         isGameFinish = false;
-        BlockArea.ReloadBlock();
+        StageControll.RetryBlock();
         Ball.InitBall();
         player.InitPlayer();
     }

@@ -10,7 +10,6 @@ public class PlayerController : MonoBehaviour
 
     private float floorSize;
     private float playerSize;
-    private bool isStart = false;
     private Vector3 playerStartPos;
 
     private void Awake()
