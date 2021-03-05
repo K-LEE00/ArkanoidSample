@@ -1,12 +1,14 @@
-﻿using UnityEngine;
-using UnityEngine.UI;
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using GameData;
 
 public class PlayerController : MonoBehaviour
 {
     public float speed = 10.0f;
     public GameObject GameFloor;
     public BallController Ball;
-    public GameManager gameMan;
+    public GameManager GameManegy;
 
     private float floorSize;
     private float playerSize;
@@ -28,20 +30,29 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (gameMan.isGameFinish)
+        if (GameManegy.nowStatus == GameStatus.Title)
+        {
+            return;
+        }
+
+        if (GameManegy.nowStatus == GameStatus.End)
         {
             if (Input.GetKey(KeyCode.R))
             {
-                gameMan.InitGame();
+                GameManegy.InitGame();
+            }
+            if (Input.GetKey(KeyCode.T))
+            {
+                GameManegy.ReturnTitle();
             }
             return;
         }
 
         float inputhval = Input.GetAxis("Horizontal");
 
-        if( !gameMan.isGameState && !gameMan.isGameFinish && inputhval != 0)
+        if( !GameManegy.isGameState && !GameManegy.isGameFinish && inputhval != 0)
         {
-            gameMan.GameStart();
+            GameManegy.GameStart();
             Ball.ForceBallPower();
         }
 

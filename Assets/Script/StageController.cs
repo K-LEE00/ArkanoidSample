@@ -2,18 +2,20 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
-using Stage;
+using GameData;
 
 public class StageController : MonoBehaviour
 {
+    //private static string stageDataRoot = "Assets\\Resources\\";
     //File System
-    private static string stageDataRoot = "Assets\\Resources\\";
+    private static string stageDataRoot;    //Awake()でビルド環境に合わせてパス指定
     private static string stageDataDirectory = "StageData";
     private static string stageDataFormat = ".csv";
     private string[] stageFileList;
 
     //CSV
-    public List<StageData> StageFiled;
+    public List<StageData> StageFiled = new List<StageData>();
+    [Disable]public int StageCount;
 
     //ブロック情報
     public float StageTopMargen;
@@ -22,7 +24,6 @@ public class StageController : MonoBehaviour
     public GameObject BlockGroup;
     private float blockWidth;
     private float blockHeight;
-    private float StageWidth;
     private float StageHeight;
     private float BlockVectorY = 0.7f;
 
@@ -31,17 +32,23 @@ public class StageController : MonoBehaviour
 
     private void Awake()
     {
-        blockWidth = BlockData.transform.localScale.x;
-        blockHeight = BlockData.transform.localScale.z;
-        StageWidth = StageArea.transform.localScale.x;
+#if UNITY_EDITOR    //エディター
+        stageDataRoot = "Assets\\Resources\\";
+#else               //その他
+        stageDataRoot = "Resources\\";
+#endif
+        blockWidth = BlockData.GetComponent<BlockController>().BlockWidth;
+        blockHeight = BlockData.GetComponent<BlockController>().BlockHeight;
         StageHeight = StageArea.transform.localScale.z;
 
-        ReadStageDataList();
-        Debug.Log("File Nun : " + stageFileList.Length);
-
-        //StageFiled = new StageData(stageFileList[0]);
-        StageFiled = new List<StageData>();
-        StageFiled.Add(new StageData(stageFileList[0]));
+        bool dataref = ReadStageDataList();
+        if (dataref && StageCount>0)
+        {
+            for(int i=0; i< StageCount; i++)
+            {
+                StageFiled.Add(new StageData(stageFileList[i]));
+            }
+        }
     }
 
     private void Start()
@@ -54,19 +61,29 @@ public class StageController : MonoBehaviour
     /// <returns>ture:取得成功、false:取得失敗</returns>
     private bool ReadStageDataList()
     {
-        string[] read = Directory.GetFiles((stageDataRoot + stageDataDirectory), ("*" + stageDataFormat), SearchOption.TopDirectoryOnly);
-        
-        if (read.Length < 1)
+        try
         {
-            return false;
-        }
+            string[] read = Directory.GetFiles((stageDataRoot + stageDataDirectory), ("*" + stageDataFormat), SearchOption.TopDirectoryOnly);
 
-        stageFileList = new string[read.Length];
-        for (int i = 0; i < read.Length; i++)
+
+            if (read.Length < 1)
+            {
+                return false;
+            }
+
+            stageFileList = new string[read.Length];
+            StageCount = stageFileList.Length;
+            for (int i = 0; i < StageCount; i++)
+            {
+                string tmppath;
+                tmppath = read[i].Replace(stageDataRoot, "");
+                stageFileList[i] = tmppath.Replace(stageDataFormat, "");
+            }
+        }
+        catch
         {
-            string tmppath;
-            tmppath = read[i].Replace(stageDataRoot, "");
-            stageFileList[i] = tmppath.Replace(stageDataFormat, "");
+            //ディレクトリ確認失敗
+            StageCount = 0;
         }
 
         return true;
@@ -80,10 +97,12 @@ public class StageController : MonoBehaviour
     public int CreateStage(int stagenum)
     {
         Vector2 filedsize = StageFiled[stagenum].GetStageBlockMax();
-
-        float xpstart = 0 - (blockWidth * 10 / 2) + (blockWidth / 2);
+        float xpstart = 0 - ((filedsize.x / 2)*blockWidth) + (blockWidth/2);
         float ypstart = (StageHeight / 2) - StageTopMargen - (blockHeight / 2);
+
         int blockcount = 0;
+
+        BlockList.Clear();
 
         for (int idxy = 0; idxy < filedsize.y; idxy++)
         {
@@ -93,7 +112,8 @@ public class StageController : MonoBehaviour
                 if (tmp != -1)
                 {
                     //ブロック配置
-                    Vector3 blockpos = new Vector3( xpstart+(idxx*blockWidth), BlockVectorY, ypstart-(idxy*blockHeight));
+                    //Vector3 blockpos = new Vector3(xpstart + (idxx * blockWidth), BlockVectorY, ypstart - (idxy * blockHeight));
+                    Vector3 blockpos = new Vector3(xpstart + (idxx * blockWidth), BlockVectorY, ypstart - (idxy * blockHeight));
                     GameObject obj = (GameObject)Instantiate(BlockData, Vector3.zero, Quaternion.identity, BlockGroup.transform);
                     obj.transform.position = blockpos;
                     obj.GetComponent<BlockController>().SetBlockHealth(tmp);
@@ -101,8 +121,8 @@ public class StageController : MonoBehaviour
                     BlockList.Add(obj);
 
                     //破壊対象ブロック集計
-                    if(tmp >= 1) 
-                    { 
+                    if (tmp >= 1)
+                    {
                         blockcount++;
                     }
                 }
@@ -119,91 +139,21 @@ public class StageController : MonoBehaviour
     {
         for (int i = 0; i < BlockList.Count; i++)
         {
-            BlockList[i].gameObject.SetActive(true);
+            BlockList[i].GetComponent<BlockController>().EnableBlock();
             BlockList[i].GetComponent<BlockController>().ResetBlockHp();
         }
     }
-}
 
-
-namespace Stage
-{
-    public class StageData
+    public void ClearBlock()
     {
-        static public int horizontalMaxConut = 10;
-        static public int verticalMaxConut = 5;
-
-
-        private TextAsset csvFile; // CSVファイル
-
-        public string stageName;
-        public string stageTooltip;
-        char[,] filedBlockData = new char[verticalMaxConut, horizontalMaxConut];
-
-        public StageData(string path)
+        for (int i = 0; i < BlockList.Count; i++)
         {
-            //CSVからデータ取り出し
-            TextAsset csv = Resources.Load(path) as TextAsset;
-            StringReader reader = new StringReader(csv.text);
-
-            int datafiledstart = 2;
-            int loadnum = 0;
-            while (reader.Peek() != -1)
+            if(BlockList[i] != null)
             {
-                string line = reader.ReadLine(); 
-
-                string tmpstr;
-                switch (loadnum)
-                {
-                    case 0:
-                        stageName = line.Replace(",", "");
-                        break;
-                    case 1:
-                        stageTooltip = line.Replace(",", "");
-                        break;
-                    default:
-                        tmpstr = line.Replace(",", "");
-                        LineDataSet(tmpstr, (loadnum - datafiledstart));
-                        break;
-                }
-
-                loadnum++;
+                Destroy(BlockList[i]);
             }
         }
-
-        /// <summary>
-        /// ブロック領域情報を取得する。
-        /// </summary>
-        /// <returns>vector2.x : Max Horizontal、vector2.y : Max Vertical</returns>
-        public Vector2 GetStageBlockMax()
-        {
-            return new Vector2(horizontalMaxConut, verticalMaxConut);
-        }
-
-        /// <summary>
-        /// 各位置のブロックの情報を確認する
-        /// </summary>
-        /// <returns>-1:ブロックなし、0:破壊不可、1~9:ブロックHP</returns>
-        public int GetStageBlock(int idxx, int idxy)
-        {
-            switch (filedBlockData[idxy,idxx])
-            {
-                case 'I':
-                    return 0;
-                case 'N':
-                    return -1;
-                default:
-                    return (int)char.GetNumericValue(filedBlockData[idxy,idxx]);
-            }
-        }
-
-        private void LineDataSet(string line, int linenum)
-        {
-            char[] tmp = line.ToCharArray(0, horizontalMaxConut);
-            for (int idxx = 0; idxx < horizontalMaxConut; idxx++)
-            {
-                filedBlockData[linenum, idxx] = tmp[idxx];
-            }
-        }
+        BlockList.Clear();
     }
 }
+
